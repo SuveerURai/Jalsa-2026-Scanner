@@ -389,17 +389,44 @@ function checkTicket(token) {
 
   script.onerror = function() {
 
-    delete window[callbackName];
+   let checkTimeout = setTimeout(function() {
 
-    requestInProgress = false;
+  delete window[callbackName];
 
-    showResult(
-      "CONNECTION ERROR",
-      "Could not connect to the JALSA server.",
-      "invalid"
-    );
+  requestInProgress = false;
 
-  };
+  showResult(
+    "CONNECTION ERROR",
+    "The JALSA server took too long to respond.<br><br>" +
+    "<small>Please check your internet connection and try again.</small>",
+    "invalid"
+  );
+
+}, 10000);
+
+
+script.onload = function() {
+
+  clearTimeout(checkTimeout);
+
+};
+
+
+script.onerror = function() {
+
+  clearTimeout(checkTimeout);
+
+  delete window[callbackName];
+
+  requestInProgress = false;
+
+  showResult(
+    "CONNECTION ERROR",
+    "Could not connect to the JALSA server.",
+    "invalid"
+  );
+
+};
 
 
   document.body.appendChild(script);
@@ -555,3 +582,176 @@ function admitEntry() {
   document.body.appendChild(script);
 
 }
+/* -----------------------------
+   DISPLAY TICKET DETAILS
+----------------------------- */
+
+function ticketDetails(data) {
+
+  let html = "";
+
+  if (data.name) {
+    html +=
+      "<strong>Name:</strong> " +
+      escapeHtml(String(data.name)) +
+      "<br>";
+  }
+
+  if (data.ticketId) {
+    html +=
+      "<strong>Ticket ID:</strong> " +
+      escapeHtml(String(data.ticketId));
+  }
+
+  if (data.entryTime) {
+    html +=
+      "<br><strong>Entry Time:</strong> " +
+      escapeHtml(
+        formatDate(data.entryTime)
+      );
+  }
+
+  return html;
+}
+
+
+/* -----------------------------
+   FORMAT DATE
+----------------------------- */
+
+function formatDate(value) {
+
+  try {
+
+    const date = new Date(value);
+
+    if (isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return date.toLocaleString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit"
+      }
+    );
+
+  } catch (error) {
+
+    return String(value);
+
+  }
+
+}
+
+
+/* -----------------------------
+   ESCAPE HTML
+----------------------------- */
+
+function escapeHtml(value) {
+
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+}
+
+
+/* -----------------------------
+   SHOW RESULT
+----------------------------- */
+
+function showResult(title, content, type) {
+
+  const result =
+    document.getElementById("result");
+
+  const resultTitle =
+    document.getElementById("resultTitle");
+
+  const ticketInfo =
+    document.getElementById("ticketInfo");
+
+  const admitButton =
+    document.getElementById("admitButton");
+
+  resultTitle.innerHTML =
+    escapeHtml(title);
+
+  ticketInfo.innerHTML =
+    content;
+
+  result.className =
+    "result " + type;
+
+  result.style.display =
+    "block";
+
+  if (title !== "VALID TICKET") {
+    admitButton.style.display = "none";
+  }
+
+}
+
+
+/* -----------------------------
+   SCAN AGAIN
+----------------------------- */
+
+function scanAgain() {
+
+  const result =
+    document.getElementById("result");
+
+  const admitButton =
+    document.getElementById("admitButton");
+
+  result.style.display = "none";
+
+  admitButton.style.display = "none";
+  admitButton.disabled = false;
+  admitButton.innerText = "ADMIT ENTRY";
+
+  currentToken = null;
+  requestInProgress = false;
+
+  if (scanner) {
+
+    scanner.clear()
+      .catch(function() {});
+
+    scanner = null;
+  }
+
+  startScanner();
+
+}
+
+
+/* -----------------------------
+   START SCANNER ON PAGE LOAD
+----------------------------- */
+
+window.addEventListener(
+  "load",
+  function() {
+
+    startScanner();
+
+  }
+);
+
+</script>
+
+</body>
+
+</html>
