@@ -413,9 +413,13 @@ function checkTicket(token) {
 
 function admitEntry() {
 
-  if (!currentToken) return;
+  if (!currentToken) {
+    return;
+  }
 
-  if (requestInProgress) return;
+  if (requestInProgress) {
+    return;
+  }
 
   requestInProgress = true;
 
@@ -423,14 +427,10 @@ function admitEntry() {
     document.getElementById("admitButton");
 
   admitButton.disabled = true;
-
-  admitButton.innerText =
-    "RECORDING ENTRY...";
-
+  admitButton.innerText = "RECORDING ENTRY...";
 
   const callbackName =
     "jalsaAdmit_" + Date.now();
-
 
   window[callbackName] = function(data) {
 
@@ -440,8 +440,7 @@ function admitEntry() {
 
     requestInProgress = false;
 
-
-    if (data.status === "ENTERED") {
+    if (data && data.status === "ENTERED") {
 
       showResult(
         "ENTRY RECORDED ✓",
@@ -453,41 +452,57 @@ function admitEntry() {
         "valid"
       );
 
-      admitButton.style.display =
-        "none";
+      admitButton.style.display = "none";
 
       return;
     }
 
-
-    if (data.status === "ALREADY_ENTERED") {
+    if (data && data.status === "ALREADY_ENTERED") {
 
       showResult(
         "ALREADY ENTERED",
-        ticketDetails(data),
+        ticketDetails(data) +
+        "<br><br>" +
+        "<span class='status-text'>" +
+        "This ticket has already been used." +
+        "</span>",
         "invalid"
       );
 
-      admitButton.style.display =
-        "none";
+      admitButton.style.display = "none";
 
       return;
     }
 
+    if (data && data.status === "PAYMENT_NOT_VERIFIED") {
+
+      showResult(
+        "PAYMENT NOT VERIFIED",
+        ticketDetails(data) +
+        "<br><br>" +
+        "<span class='status-text'>" +
+        "Payment has not been verified." +
+        "</span>",
+        "warning"
+      );
+
+      admitButton.style.display = "none";
+
+      return;
+    }
 
     showResult(
       "ENTRY NOT RECORDED",
       escapeHtml(
-        data.message ||
-        "The ticket could not be admitted."
+        data && data.message
+          ? data.message
+          : "The ticket could not be admitted."
       ),
       "invalid"
     );
 
     admitButton.disabled = false;
-
-    admitButton.innerText =
-      "ADMIT ENTRY";
+    admitButton.innerText = "ADMIT ENTRY";
 
   };
 
@@ -495,31 +510,42 @@ function admitEntry() {
   const script =
     document.createElement("script");
 
-
   script.src =
     API_URL +
     "?action=admit" +
     "&token=" +
     encodeURIComponent(currentToken) +
     "&prefix=" +
-callbackName;
-    callbackName;
+    encodeURIComponent(callbackName) +
+    "&t=" +
+    Date.now();
 
 
-  script.onerror = function() {
+  script.onload = function() {
+
+    console.log("Admission API response loaded.");
+
+  };
+
+
+  script.onerror = function(error) {
+
+    console.error(
+      "Admission API failed:",
+      error
+    );
 
     delete window[callbackName];
 
     requestInProgress = false;
 
     admitButton.disabled = false;
-
-    admitButton.innerText =
-      "ADMIT ENTRY";
+    admitButton.innerText = "ADMIT ENTRY";
 
     showResult(
       "CONNECTION ERROR",
-      "Could not connect to the JALSA server.",
+      "The JALSA server could not be reached.<br><br>" +
+      "<small>Please check your internet connection and try again.</small>",
       "invalid"
     );
 
@@ -529,185 +555,3 @@ callbackName;
   document.body.appendChild(script);
 
 }
-
-
-/* -----------------------------
-   TICKET DETAILS
------------------------------ */
-
-function ticketDetails(data) {
-
-  let html = "";
-
-  if (data.name) {
-
-    html +=
-      "<b>Name:</b> " +
-      escapeHtml(data.name) +
-      "<br>";
-
-  }
-
-  if (data.ticketId) {
-
-    html +=
-      "<b>Ticket ID:</b> " +
-      escapeHtml(data.ticketId) +
-      "<br>";
-
-  }
-
-  if (data.entryTime) {
-
-    html +=
-      "<b>Entry Time:</b> " +
-      escapeHtml(
-        formatDate(data.entryTime)
-      ) +
-      "<br>";
-
-  }
-
-  return html;
-
-}
-
-
-/* -----------------------------
-   DISPLAY RESULT
------------------------------ */
-
-function showResult(
-  title,
-  message,
-  type
-) {
-
-  const result =
-    document.getElementById("result");
-
-  const titleElement =
-    document.getElementById("resultTitle");
-
-  const info =
-    document.getElementById("ticketInfo");
-
-
-  result.style.display =
-    "block";
-
-  result.className =
-    "result " + type;
-
-  titleElement.innerHTML =
-    title;
-
-  info.innerHTML =
-    message;
-
-
-  const admitButton =
-    document.getElementById("admitButton");
-
-  if (title !== "VALID TICKET") {
-
-    admitButton.style.display =
-      "none";
-
-  }
-
-}
-
-
-/* -----------------------------
-   SCAN AGAIN
------------------------------ */
-
-function scanAgain() {
-
-  currentToken = null;
-
-  requestInProgress = false;
-
-
-  document.getElementById("result")
-    .style.display = "none";
-
-
-  document.getElementById("admitButton")
-    .style.display = "none";
-
-
-  document.getElementById("admitButton")
-    .disabled = false;
-
-
-  document.getElementById("admitButton")
-    .innerText = "ADMIT ENTRY";
-
-
-  startScanner();
-
-}
-
-
-/* -----------------------------
-   FORMAT DATE
------------------------------ */
-
-function formatDate(value) {
-
-  try {
-
-    const date =
-      new Date(value);
-
-    return date.toLocaleString(
-      "en-IN",
-      {
-        dateStyle: "medium",
-        timeStyle: "short"
-      }
-    );
-
-  } catch (error) {
-
-    return value;
-
-  }
-
-}
-
-
-/* -----------------------------
-   ESCAPE HTML
------------------------------ */
-
-function escapeHtml(text) {
-
-  const div =
-    document.createElement("div");
-
-  div.textContent =
-    String(text);
-
-  return div.innerHTML;
-
-}
-
-
-/* -----------------------------
-   START
------------------------------ */
-
-window.onload = function() {
-
-  startScanner();
-
-};
-
-</script>
-
-</body>
-
-</html>
