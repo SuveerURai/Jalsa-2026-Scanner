@@ -1,25 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
   <title>JALSA 2026 Entry Scanner</title>
 
-  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <script
+    src="https://unpkg.com/html5-qrcode"
+    type="text/javascript">
+  </script>
 
   <style>
+
     * {
       box-sizing: border-box;
     }
 
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
+      padding: 20px;
       background: #111827;
       color: white;
+      font-family: Arial, sans-serif;
       min-height: 100vh;
-      padding: 20px;
     }
 
     .container {
@@ -46,100 +56,157 @@
     }
 
     .result {
+      display: none;
       margin-top: 20px;
-      padding: 20px;
-      border-radius: 14px;
+      padding: 22px;
+      border-radius: 16px;
       background: #1f2937;
       text-align: center;
-      display: none;
+    }
+
+    .result.valid {
+      border: 2px solid #22c55e;
+    }
+
+    .result.invalid {
+      border: 2px solid #ef4444;
+    }
+
+    .result.warning {
+      border: 2px solid #f59e0b;
     }
 
     .result h2 {
       margin-top: 0;
+      margin-bottom: 15px;
     }
 
     .ticket-info {
       text-align: left;
-      margin: 15px 0;
       line-height: 1.8;
+      margin: 15px 0;
     }
 
-    button {
-      width: 100%;
-      padding: 15px;
-      border: none;
-      border-radius: 10px;
-      font-size: 17px;
-      font-weight: bold;
-      cursor: pointer;
-      margin-top: 10px;
+    .admit {
+      background: #22c55e;
+      color: white;
     }
 
-    #scanAgain {
+    .scan-again {
       background: #374151;
       color: white;
     }
 
-    .valid {
-      border: 2px solid #22c55e;
+    button {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 10px;
+      font-size: 17px;
+      font-weight: bold;
     }
 
-    .invalid {
-      border: 2px solid #ef4444;
+    button:disabled {
+      opacity: 0.5;
     }
 
-    .warning {
-      border: 2px solid #f59e0b;
+    .status-text {
+      font-size: 15px;
+      color: #d1d5db;
     }
 
-    .small {
-      color: #9ca3af;
-      font-size: 13px;
-      margin-top: 20px;
+    .footer {
       text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+      margin-top: 25px;
     }
+
   </style>
+
 </head>
+
 
 <body>
 
 <div class="container">
 
   <h1>JALSA 2026</h1>
-  <div class="subtitle">Entry Scanner</div>
+
+  <div class="subtitle">
+    Entry Scanner
+  </div>
+
 
   <div id="reader"></div>
 
+
   <div id="result" class="result">
+
     <h2 id="resultTitle"></h2>
 
     <div id="ticketInfo" class="ticket-info"></div>
 
-    <button id="scanAgain" onclick="scanAgain()">
-      Scan Another Ticket
+    <button
+      id="admitButton"
+      class="admit"
+      style="display:none;"
+      onclick="admitEntry()">
+      ADMIT ENTRY
     </button>
+
+    <button
+      id="scanAgainButton"
+      class="scan-again"
+      onclick="scanAgain()">
+      SCAN ANOTHER TICKET
+    </button>
+
   </div>
 
-  <div class="small">
-    Scan the attendee's QR code at the entrance.
+
+  <div class="footer">
+    JALSA 2026 • Authorized Entry Scanner
   </div>
 
 </div>
 
+
 <script>
 
+const API_URL =
+  "https://script.google.com/macros/s/AKfycbzQNHxOdXTX9RkNqbZE1Pzz8Q6_jdJ7IUT6T13n10UezSJWiwmM1Rky9mbo248pZXGX/exec";
+
+
 let scanner = null;
-let scanning = true;
+
+let scanning = false;
+
+let currentToken = null;
+
+let requestInProgress = false;
+
+
+/* -----------------------------
+   START CAMERA
+----------------------------- */
 
 function startScanner() {
+
+  scanning = true;
 
   scanner = new Html5Qrcode("reader");
 
   scanner.start(
-    { facingMode: "environment" },
+
+    {
+      facingMode: "environment"
+    },
 
     {
       fps: 10,
+
       qrbox: {
         width: 250,
         height: 250
@@ -150,36 +217,30 @@ function startScanner() {
 
       if (!scanning) return;
 
+      if (requestInProgress) return;
+
       scanning = false;
 
-      console.log("QR TOKEN:", decodedText);
+      currentToken = decodedText.trim();
 
-      scanner.stop().then(() => {
+      stopScanner();
 
-        showResult(
-          "QR SCANNED",
-          "Token received:<br><br><b>" +
-          escapeHtml(decodedText) +
-          "</b>",
-          "valid"
-        );
-
-      }).catch(err => {
-        console.log(err);
-      });
+      checkTicket(currentToken);
 
     },
 
     function(errorMessage) {
+
       // Normal scanning errors are ignored.
+
     }
 
-  ).catch(err => {
+  ).catch(function(error) {
 
     showResult(
       "CAMERA ERROR",
-      "Unable to start the camera.<br><br>" +
-      escapeHtml(err.toString()),
+      "Could not start the camera.<br><br>" +
+      escapeHtml(error.toString()),
       "invalid"
     );
 
@@ -188,47 +249,464 @@ function startScanner() {
 }
 
 
-function showResult(title, message, type) {
+/* -----------------------------
+   STOP CAMERA
+----------------------------- */
 
-  const result = document.getElementById("result");
-  const resultTitle = document.getElementById("resultTitle");
-  const ticketInfo = document.getElementById("ticketInfo");
+function stopScanner() {
 
-  result.style.display = "block";
+  if (!scanner) return;
 
-  result.className = "result " + type;
+  scanner.stop()
+    .then(function() {
 
-  resultTitle.innerHTML = title;
+      console.log("Scanner stopped.");
 
-  ticketInfo.innerHTML = message;
+    })
+    .catch(function(error) {
+
+      console.log("Scanner stop error:", error);
+
+    });
+
 }
 
+
+/* -----------------------------
+   CHECK TICKET
+----------------------------- */
+
+function checkTicket(token) {
+
+  requestInProgress = true;
+
+  showResult(
+    "CHECKING TICKET...",
+    "Please wait.",
+    "warning"
+  );
+
+  const callbackName =
+    "jalsaCheck_" + Date.now();
+
+  window[callbackName] = function(data) {
+
+    console.log("CHECK RESPONSE:", data);
+
+    delete window[callbackName];
+
+    requestInProgress = false;
+
+    if (!data) {
+
+      showResult(
+        "ERROR",
+        "No response received from the server.",
+        "invalid"
+      );
+
+      return;
+    }
+
+
+    if (data.status === "VALID") {
+
+      showResult(
+        "VALID TICKET",
+        ticketDetails(data) +
+        "<br><br>" +
+        "<span class='status-text'>" +
+        "Payment verified. Ready for admission." +
+        "</span>",
+        "valid"
+      );
+
+      document.getElementById("admitButton").style.display =
+        "block";
+
+      return;
+    }
+
+
+    if (data.status === "ALREADY_ENTERED") {
+
+      showResult(
+        "ALREADY ENTERED",
+        ticketDetails(data) +
+        "<br><br>" +
+        "<span class='status-text'>" +
+        "This ticket has already been used." +
+        "</span>",
+        "invalid"
+      );
+
+      return;
+    }
+
+
+    if (data.status === "PAYMENT_NOT_VERIFIED") {
+
+      showResult(
+        "PAYMENT NOT VERIFIED",
+        ticketDetails(data) +
+        "<br><br>" +
+        "<span class='status-text'>" +
+        escapeHtml(
+          data.message ||
+          "Payment has not been verified."
+        ) +
+        "</span>",
+        "warning"
+      );
+
+      return;
+    }
+
+
+    showResult(
+      "INVALID QR",
+      escapeHtml(
+        data.message ||
+        "This QR code is not recognized."
+      ),
+      "invalid"
+    );
+
+  };
+
+
+  const script =
+    document.createElement("script");
+
+  script.src =
+    API_URL +
+    "?action=check" +
+    "&token=" +
+    encodeURIComponent(token) +
+    "&callback=" +
+    callbackName;
+
+
+  script.onerror = function() {
+
+    delete window[callbackName];
+
+    requestInProgress = false;
+
+    showResult(
+      "CONNECTION ERROR",
+      "Could not connect to the JALSA server.",
+      "invalid"
+    );
+
+  };
+
+
+  document.body.appendChild(script);
+
+}
+
+
+/* -----------------------------
+   ADMIT ENTRY
+----------------------------- */
+
+function admitEntry() {
+
+  if (!currentToken) return;
+
+  if (requestInProgress) return;
+
+  requestInProgress = true;
+
+  const admitButton =
+    document.getElementById("admitButton");
+
+  admitButton.disabled = true;
+
+  admitButton.innerText =
+    "RECORDING ENTRY...";
+
+
+  const callbackName =
+    "jalsaAdmit_" + Date.now();
+
+
+  window[callbackName] = function(data) {
+
+    console.log("ADMIT RESPONSE:", data);
+
+    delete window[callbackName];
+
+    requestInProgress = false;
+
+
+    if (data.status === "ENTERED") {
+
+      showResult(
+        "ENTRY RECORDED ✓",
+        ticketDetails(data) +
+        "<br><br>" +
+        "<span class='status-text'>" +
+        "Entry successfully recorded." +
+        "</span>",
+        "valid"
+      );
+
+      admitButton.style.display =
+        "none";
+
+      return;
+    }
+
+
+    if (data.status === "ALREADY_ENTERED") {
+
+      showResult(
+        "ALREADY ENTERED",
+        ticketDetails(data),
+        "invalid"
+      );
+
+      admitButton.style.display =
+        "none";
+
+      return;
+    }
+
+
+    showResult(
+      "ENTRY NOT RECORDED",
+      escapeHtml(
+        data.message ||
+        "The ticket could not be admitted."
+      ),
+      "invalid"
+    );
+
+    admitButton.disabled = false;
+
+    admitButton.innerText =
+      "ADMIT ENTRY";
+
+  };
+
+
+  const script =
+    document.createElement("script");
+
+
+  script.src =
+    API_URL +
+    "?action=admit" +
+    "&token=" +
+    encodeURIComponent(currentToken) +
+    "&callback=" +
+    callbackName;
+
+
+  script.onerror = function() {
+
+    delete window[callbackName];
+
+    requestInProgress = false;
+
+    admitButton.disabled = false;
+
+    admitButton.innerText =
+      "ADMIT ENTRY";
+
+    showResult(
+      "CONNECTION ERROR",
+      "Could not connect to the JALSA server.",
+      "invalid"
+    );
+
+  };
+
+
+  document.body.appendChild(script);
+
+}
+
+
+/* -----------------------------
+   TICKET DETAILS
+----------------------------- */
+
+function ticketDetails(data) {
+
+  let html = "";
+
+  if (data.name) {
+
+    html +=
+      "<b>Name:</b> " +
+      escapeHtml(data.name) +
+      "<br>";
+
+  }
+
+  if (data.ticketId) {
+
+    html +=
+      "<b>Ticket ID:</b> " +
+      escapeHtml(data.ticketId) +
+      "<br>";
+
+  }
+
+  if (data.entryTime) {
+
+    html +=
+      "<b>Entry Time:</b> " +
+      escapeHtml(
+        formatDate(data.entryTime)
+      ) +
+      "<br>";
+
+  }
+
+  return html;
+
+}
+
+
+/* -----------------------------
+   DISPLAY RESULT
+----------------------------- */
+
+function showResult(
+  title,
+  message,
+  type
+) {
+
+  const result =
+    document.getElementById("result");
+
+  const titleElement =
+    document.getElementById("resultTitle");
+
+  const info =
+    document.getElementById("ticketInfo");
+
+
+  result.style.display =
+    "block";
+
+  result.className =
+    "result " + type;
+
+  titleElement.innerHTML =
+    title;
+
+  info.innerHTML =
+    message;
+
+
+  const admitButton =
+    document.getElementById("admitButton");
+
+  if (title !== "VALID TICKET") {
+
+    admitButton.style.display =
+      "none";
+
+  }
+
+}
+
+
+/* -----------------------------
+   SCAN AGAIN
+----------------------------- */
 
 function scanAgain() {
 
-  document.getElementById("result").style.display = "none";
+  currentToken = null;
 
-  scanning = true;
+  requestInProgress = false;
+
+
+  document.getElementById("result")
+    .style.display = "none";
+
+
+  document.getElementById("admitButton")
+    .style.display = "none";
+
+
+  document.getElementById("admitButton")
+    .disabled = false;
+
+
+  document.getElementById("admitButton")
+    .innerText = "ADMIT ENTRY";
+
 
   startScanner();
+
 }
 
+
+/* -----------------------------
+   FORMAT DATE
+----------------------------- */
+
+function formatDate(value) {
+
+  try {
+
+    const date =
+      new Date(value);
+
+    return date.toLocaleString(
+      "en-IN",
+      {
+        dateStyle: "medium",
+        timeStyle: "short"
+      }
+    );
+
+  } catch (error) {
+
+    return value;
+
+  }
+
+}
+
+
+/* -----------------------------
+   ESCAPE HTML
+----------------------------- */
 
 function escapeHtml(text) {
 
-  const div = document.createElement("div");
+  const div =
+    document.createElement("div");
 
-  div.textContent = text;
+  div.textContent =
+    String(text);
 
   return div.innerHTML;
+
 }
 
 
+/* -----------------------------
+   START
+----------------------------- */
+
 window.onload = function() {
+
   startScanner();
+
 };
 
 </script>
 
 </body>
+
 </html>
