@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>JALSA 2026 Entry Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #111827;
+      color: white;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      margin: auto;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #9ca3af;
+      margin-bottom: 25px;
+    }
+
+    #reader {
+      width: 100%;
+      background: black;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .result {
+      margin-top: 20px;
+      padding: 20px;
+      border-radius: 14px;
+      background: #1f2937;
+      text-align: center;
+      display: none;
+    }
+
+    .result h2 {
+      margin-top: 0;
+    }
+
+    .ticket-info {
+      text-align: left;
+      margin: 15px 0;
+      line-height: 1.8;
+    }
+
+    button {
+      width: 100%;
+      padding: 15px;
+      border: none;
+      border-radius: 10px;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    #scanAgain {
+      background: #374151;
+      color: white;
+    }
+
+    .valid {
+      border: 2px solid #22c55e;
+    }
+
+    .invalid {
+      border: 2px solid #ef4444;
+    }
+
+    .warning {
+      border: 2px solid #f59e0b;
+    }
+
+    .small {
+      color: #9ca3af;
+      font-size: 13px;
+      margin-top: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>JALSA 2026</h1>
+  <div class="subtitle">Entry Scanner</div>
+
+  <div id="reader"></div>
+
+  <div id="result" class="result">
+    <h2 id="resultTitle"></h2>
+
+    <div id="ticketInfo" class="ticket-info"></div>
+
+    <button id="scanAgain" onclick="scanAgain()">
+      Scan Another Ticket
+    </button>
+  </div>
+
+  <div class="small">
+    Scan the attendee's QR code at the entrance.
+  </div>
+
+</div>
+
+<script>
+
+let scanner = null;
+let scanning = true;
+
+function startScanner() {
+
+  scanner = new Html5Qrcode("reader");
+
+  scanner.start(
+    { facingMode: "environment" },
+
+    {
+      fps: 10,
+      qrbox: {
+        width: 250,
+        height: 250
+      }
+    },
+
+    function(decodedText) {
+
+      if (!scanning) return;
+
+      scanning = false;
+
+      console.log("QR TOKEN:", decodedText);
+
+      scanner.stop().then(() => {
+
+        showResult(
+          "QR SCANNED",
+          "Token received:<br><br><b>" +
+          escapeHtml(decodedText) +
+          "</b>",
+          "valid"
+        );
+
+      }).catch(err => {
+        console.log(err);
+      });
+
+    },
+
+    function(errorMessage) {
+      // Normal scanning errors are ignored.
+    }
+
+  ).catch(err => {
+
+    showResult(
+      "CAMERA ERROR",
+      "Unable to start the camera.<br><br>" +
+      escapeHtml(err.toString()),
+      "invalid"
+    );
+
+  });
+
+}
+
+
+function showResult(title, message, type) {
+
+  const result = document.getElementById("result");
+  const resultTitle = document.getElementById("resultTitle");
+  const ticketInfo = document.getElementById("ticketInfo");
+
+  result.style.display = "block";
+
+  result.className = "result " + type;
+
+  resultTitle.innerHTML = title;
+
+  ticketInfo.innerHTML = message;
+}
+
+
+function scanAgain() {
+
+  document.getElementById("result").style.display = "none";
+
+  scanning = true;
+
+  startScanner();
+}
+
+
+function escapeHtml(text) {
+
+  const div = document.createElement("div");
+
+  div.textContent = text;
+
+  return div.innerHTML;
+}
+
+
+window.onload = function() {
+  startScanner();
+};
+
+</script>
+
+</body>
+</html>
